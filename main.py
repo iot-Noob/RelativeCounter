@@ -46,6 +46,19 @@ async def get_files():
                     mr.append({"index":ind,"filename":f})
             return mr
  
+@app.delete("/delete_file",name="create a new csv file to delete",description="delete csv ",tags=['file_creation'])
+
+async def delete_csv(path:str=Query(...,description="Delete file path")):
+    try:
+        temp=os.path.join("data",path)
+        PathModel(path=temp)
+        if not os.path.exists(temp):
+            return  HTTPException(400,"fILE NOT FOUND")
+        else:
+      
+            os.remove(temp)
+    except Exception as e:
+        return HTTPException(500,f"Error occur deletion csv {e}")
 @app.post("/add_data", description="Input relative list", tags=['data manipulation'])
 async def add_data(
     relative_name: str = Query(..., title="Relative name", description="Name of your relative"),
