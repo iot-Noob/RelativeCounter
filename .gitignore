@@ -1,0 +1,8 @@
+*.ps1
+*.sh
+*.bat
+*.csv
+data
+.env
+*.pyc
+__pycache__
