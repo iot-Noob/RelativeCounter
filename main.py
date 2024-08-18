@@ -7,7 +7,16 @@ from load_env_data import csv_path
 from Models.mainModels import PathModel
 from enum import Enum
 from typing import List
+from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="Relative Counter for Talha's Wedding")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow requests from any origin
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 mcsvfp=csv_path if csv_path else "./data/relative_counter.csv"
 
@@ -165,58 +174,33 @@ async def edit_record(
 async def data_view(
     file_name: List[str] = Query(None, title="Name of CSV files", description="List of CSV files to process"),
     sort_by: str = Query(None, enum=["Relative_Name", "relation", "contact_info", "address", "rsvp_status", "number_of_member"], description="Column name to sort by"),
-    ascending: bool = Query(True, description="Sort order, set to False for descending order"),
-    page: int = Query(1, description="Page number", ge=1),
-    size: int = Query(10, description="Number of records per page", ge=1)
+    ascending: bool = Query(True, description="Sort order, set to False for descending order")
 ):
     try:
+        all_data = {}  # This will store the combined data from all files
+
         if file_name and len(file_name) > 0:
-            # Process each file in the list
-            file_data = {}
             for fname in file_name:
                 file_path = os.path.join("data", fname)
-                PathModel(path=file_path)
                 
                 if not os.path.exists(file_path):
                     raise HTTPException(status_code=400, detail=f"File not found: {fname}")
 
                 # Read the CSV file
                 df = pd.read_csv(file_path)
-                
+      
                 # Sort the DataFrame if sort_by is provided
                 if sort_by:
                     if sort_by not in df.columns:
                         raise HTTPException(status_code=400, detail=f"Invalid sort_by column: {sort_by}")
                     df = df.sort_values(by=sort_by, ascending=ascending)
                 
-                # Calculate pagination details
-                total_records = len(df)
-                total_pages = (total_records // size) + (1 if total_records % size > 0 else 0)
-
-                if page > total_pages:
-                    raise HTTPException(status_code=404, detail=f"Page {page} does not exist. Total pages: {total_pages}.")
-
-                start_idx = (page - 1) * size
-                end_idx = start_idx + size
-
-                # Paginate the DataFrame
-                df_paginated = df.iloc[start_idx:end_idx]
-
-                # Convert the DataFrame to a list of dictionaries
-                data = df_paginated.to_dict(orient="records")
-
-                # Store data for each file
-                file_data[fname] = {
-                    "total_records": total_records,
-                    "total_pages": total_pages,
-                    "data": data
-                }
-                
-            return file_data
-        
+                # Add the data under the filename as the key
+                all_data[fname] = df.to_dict(orient="records")
+            
         else:
-            # Process default CSV file
-            file_path = csv_path
+            # Default CSV file processing
+            file_path = "./data/relative_records.csv"
             if not os.path.exists(file_path):
                 raise HTTPException(status_code=400, detail="Default CSV file not found")
 
@@ -228,28 +212,11 @@ async def data_view(
                     raise HTTPException(status_code=400, detail=f"Invalid sort_by column: {sort_by}")
                 df = df.sort_values(by=sort_by, ascending=ascending)
             
-            # Calculate pagination details
-            total_records = len(df)
-            total_pages = (total_records // size) + (1 if total_records % size > 0 else 0)
+            # Add the data under the filename as the key
+            all_data["relative_records.csv"] = df.to_dict(orient="records")
 
-            if page > total_pages:
-                raise HTTPException(status_code=404, detail=f"Page {page} does not exist. Total pages: {total_pages}.")
+        return {"total_records": sum(len(data) for data in all_data.values()), "data": all_data}
 
-            start_idx = (page - 1) * size
-            end_idx = start_idx + size
-
-            # Paginate the DataFrame
-            df_paginated = df.iloc[start_idx:end_idx]
-
-            # Convert the DataFrame to a list of dictionaries
-            data = df_paginated.to_dict(orient="records")
-
-            return {
-                "total_records": total_records,
-                "total_pages": total_pages,
-                "data": data
-            }
-    
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error reading file due to {e}")
     
